@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>أرشيف البحث</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='app.css', v=app_version) }}">
+</head>
+<body>
+
+<div id="setupOverlay" class="setup-overlay hidden">
+  <div class="setup-wrap">
+    <div class="setup-card">
+      <button class="setup-close hidden" id="setupCloseBtn">✕</button>
+      <h2 id="setupTitle">إعداد أول مرة</h2>
+      <p>حدد مسار ملف الإكسل اللي عايز تحوّله لقاعدة بحث سريعة. الأداة هتفهرس كل الصفوف، وبعد كده تقدر تعمل مزامنة (Sync) في أي وقت بضغطة زرار.</p>
+      <div class="field">
+        <label>اسم مميز لهذا الملف (اختياري)</label>
+        <input type="text" id="nameInput" placeholder="مثال: جدول الكميات - مشروع كذا">
+      </div>
+      <div class="field">
+        <label>مسار ملف الإكسل الكامل</label>
+        <input type="text" id="excelPathInput" placeholder="C:\Users\Name\Documents\data.xlsx">
+        <small>على ويندوز: دوس شيفت + زر يمين على الملف واختار "Copy as path" وألصقه هنا.</small>
+      </div>
+      <div class="field">
+        <label>عمود مفتاح فريد (اختياري، بس بينصح بيه)</label>
+        <input type="text" id="uniqueColInput" placeholder="مثال: رقم الهاتف أو الكود">
+        <small>يستخدم للمزامنة التزايدية عشان تعرف الصف اتغيّر ولا لأ. سيبه فاضي لو مش متأكد.</small>
+      </div>
+      <div class="field">
+        <label>رقم صف العناوين (اختياري)</label>
+        <input type="text" id="headerRowInput" placeholder="تلقائي — الأداة بتكتشفه لوحدها">
+        <small>سيبه فاضي عادةً. لو الملف فيه بيانات مشروع/عنوان فوق الجدول والاكتشاف التلقائي غلط، اكتب رقم صف العناوين زي ما شايفه في إكسل (مثلاً 4).</small>
+      </div>
+      <div class="field">
+        <label for="lastColumnInput">آخر عمود للفهرسة (اختياري)</label>
+        <input type="text" id="lastColumnInput" placeholder="مثال: N أو 14" dir="ltr">
+        <small>تتم فهرسة الأعمدة من A حتى العمود المحدد فقط، ويُستخدم نفس النطاق عند المزامنة. اتركه فارغًا لفهرسة كل الأعمدة. ملف الإكسل الأصلي لا يتغير.</small>
+      </div>
+      <button class="primary-btn" id="setupBtn">ابدأ الفهرسة</button>
+      <button class="link-btn" id="setupSavedComparisonsBtn">فتح المقارنات المحفوظة</button>
+      <div class="banner err" id="setupError"></div>
+    </div>
+  </div>
+</div>
+
+<div id="mainScreen" class="hidden">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">DB</div>
+      <div>
+        <h1>أرشيف البحث</h1>
+        <small dir="ltr" id="appVersion">{{ app_version }}</small>
+      </div>
+    </div>
+    <div class="stats-strip">
+      <div class="file-switcher">
+        <button class="file-btn" id="fileSwitchBtn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="m6 9 6 6 6-6"/></svg>
+          <b id="activeFileName">—</b>
+        </button>
+        <div class="file-dropdown" id="fileDropdown"></div>
+      </div>
+      <div class="stat-chip">عدد السجلات: <b id="rowCount">—</b></div>
+      <div class="stat-chip">آخر مزامنة: <b id="lastSync">—</b></div>
+      <button class="sync-btn" id="syncBtn">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <path d="M21 12a9 9 0 1 1-2.6-6.4M21 4v5h-5"/>
+        </svg>
+        مزامنة
+      </button>
+    </div>
+  </div>
+
+  <div class="container">
+    <div class="banner ok" id="syncBanner"></div>
+
+    <div class="search-panel">
+      <div class="search-row">
+        <svg class="search-icon" width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/>
+        </svg>
+        <input type="text" id="searchInput" placeholder="اكتب أي كلمة، اسم، رقم...">
+      </div>
+      <label class="all-files-toggle">
+        <input type="checkbox" id="allFilesToggle">
+        دور في كل الملفات مع بعض (مش الملف النشط بس)
+      </label>
+      <div class="filter-panel" id="filterPanel">
+        <div class="filter-heading"><b>فلترة النتائج</b><span id="filterStatus" aria-live="polite">الفلاتر محفوظة عند التبديل بين الملفات</span></div>
+        <div id="filterRows"></div>
+        <small>لاستبعاد «المسجد»: اختر «أي خلية في الصف» ثم «لا يحتوي على — استبعاد». يُستبعد الصف كاملًا إذا ظهرت الكلمة في أي عمود.</small>
+        <div class="filter-actions">
+          <button class="link-btn" id="addFilterBtn">+ إضافة شرط</button>
+          <button class="link-btn" id="applyFiltersBtn">تطبيق الفلاتر</button>
+          <button class="link-btn" id="clearFiltersBtn">مسح الفلاتر</button>
+        </div>
+      </div>
+      <div class="result-meta" id="resultMeta" aria-live="polite"></div>
+    </div>
+
+    <div class="toolbar">
+      <button class="link-btn" id="addColumnBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14"/></svg>
+        إضافة عمود جديد
+      </button>
+      <button class="link-btn" id="savedComparisonsBtn">المقارنات المحفوظة</button>
+      <button class="link-btn" id="compareBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M8 3v18M16 3v18M4 8h4M4 16h4M16 8h4M16 16h4"/></svg>
+        مقارنة ملفين
+      </button>
+      <button class="link-btn" id="exportBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+        تصدير النتائج لإكسل
+      </button>
+    </div>
+    <div class="edit-hint">💡 اضغط على أي قيمة عشان تعدّلها. أي خلية تعدّلها من عمود أصلي (من الإكسل) بتتقفل تلقائياً 🔒 وتفضل زي ما هي دايماً حتى لو الإكسل اتغيّر وعملت مزامنة — لإلغاء القفل دوس على 🔒 نفسها. الأعمدة اللي تضيفها بنفسك محمية دايماً من غير قفل أصلاً.</div>
+
+    <div id="resultsArea"></div>
+    <div class="pager hidden" id="pager">
+      <button id="prevBtn">السابق</button>
+      <button id="nextBtn">التالي</button>
+    </div>
+  </div>
+</div>
+
+<div id="compareOverlay" class="setup-overlay hidden">
+  <div class="setup-wrap compare-wrap">
+    <div class="setup-card">
+      <button class="setup-close" id="compareCloseBtn">✕</button>
+      <h2>مقارنة ملفين</h2>
+      <div class="field"><label for="comparisonTitle">اسم المقارنة المحفوظة (اختياري)</label><input id="comparisonTitle" maxlength="160" placeholder="مثال: مراجعة الميكانيكا — الإصدار الثاني"><small>تُحفظ النتائج وقرارات المراجعة تلقائيًا على هذا الجهاز.</small></div>
+      <p>قارن بالمفتاح الفريد، أو اطلب اقتراحات حسب الوصف لمراجعتها وقبولها يدويًا.</p>
+      <div class="field"><label for="compareMode">طريقة المقارنة</label><select id="compareMode"><option value="key">تطابق الكود / المفتاح حرفيًا</option><option value="similarity">اقتراحات تشابه الوصف — مراجعة يدوية</option></select></div>
+      <div class="field hidden" id="thresholdField"><label for="compareThreshold">الحد الأدنى للتشابه النصي (%)</label><input id="compareThreshold" type="number" min="0" max="100" value="65"><small>حتى 3 اقتراحات لكل صف من أفضل 25 مرشحًا نصيًا. النسبة ليست تأكيدًا لتكافؤ المواصفات أو الكميات، وقد توجد تطابقات لم تظهر ضمن المرشحين.</small></div>
+      <div class="compare-grid">
+        <div>
+          <div class="field">
+            <label>الملف الأول</label>
+            <select id="compareFileA"></select>
+          </div>
+          <div class="field">
+            <label class="compare-key-label">عمود المفتاح فيه</label>
+            <select id="compareKeyA"></select>
+          </div>
+          <div class="comparison-filter-box"><b>تضييق نطاق الملف الأول</b><div id="compareFiltersA"></div><button class="link-btn" id="addCompareFilterA">+ شرط فلترة</button></div>
+        </div>
+        <div>
+          <div class="field">
+            <label>الملف الثاني</label>
+            <select id="compareFileB"></select>
+          </div>
+          <div class="field">
+            <label class="compare-key-label">عمود المفتاح فيه</label>
+            <select id="compareKeyB"></select>
+          </div>
+          <div class="comparison-filter-box"><b>تضييق نطاق الملف الثاني</b><div id="compareFiltersB"></div><button class="link-btn" id="addCompareFilterB">+ شرط فلترة</button></div>
+        </div>
+      </div>
+      <section class="comparison-filter-box" id="compoundKeyOptions"><b>أعمدة إضافية لربط البنود (اختياري)</b><p class="edit-hint">المفتاح أعلاه مع الأعمدة التالية يحدد البند، مثل الكود + القسم + الموقع. كل سطر يربط عمودًا من الملف الأول بمقابله في الثاني. الصف الذي ينقصه جزء من المفتاح يُستبعد ويظهر عدده.</p><div id="compoundKeyPairs"></div><button class="link-btn" id="addCompoundKey">+ عمود ربط إضافي</button></section>
+      <div class="filter-actions"><button class="link-btn" id="useSearchFilters">استخدام فلاتر البحث في الملفين</button><button class="link-btn" id="copyCompareFilters">نسخ شروط الأول إلى الثاني</button></div>
+      <p class="edit-hint">تُطبّق الفلاتر قبل المقارنة لتقليل عدد البنود. النتائج تخص هذا النطاق فقط؛ غياب بند من النطاق لا يعني أنه محذوف من الملف كله.</p>
+      <div class="field"><label for="quantityMode">ما الذي تريد مقارنته؟</label><select id="quantityMode"><option value="">قيم الأعمدة — المقارنة الحالية</option><option value="yearly">الكميات: سنة بسنة + فرق الإجمالي</option><option value="total">الكميات: إجمالي السنوات المختارة</option><option value="custom">الكميات: سنوات مخصصة (مثل الأولى مقابل الثانية)</option></select></div>
+      <section id="quantityOptions" class="comparison-filter-box hidden">
+        <b>أعمدة الكميات في الملفين</b>
+        <p class="edit-hint">أضف السنوات الثلاث حتى يظهر أي انتقال بينها. كل سطر يحدد عمودًا من الأول ومقابله من الثاني. الإجمالي للسنوات المختارة فقط؛ استخدم نفس الوحدة داخل كل بند.</p>
+        <div id="quantityPairs"></div>
+        <div class="filter-actions"><button class="link-btn" id="addQuantityPair">+ سنة / زوج أعمدة</button><button class="link-btn" id="suggestQuantityPairs">اقتراح أعمدة السنوات المتشابهة</button></div>
+        <p class="edit-hint">الخلية الفارغة لا تعني صفرًا. يُحسب الإجمالي من القيم الرقمية الموجودة فقط، ويُعرض الفراغ كما هو.</p>
+        <b>أعمدة تظهر بجوار النتيجة في التقرير — لا تدخل في مقارنة الكميات</b>
+        <div class="compare-grid"><div><p>من الملف الأول</p><div id="displayColumnsA" class="display-columns"></div></div><div><p>من الملف الثاني</p><div id="displayColumnsB" class="display-columns"></div></div></div>
+        <small>اختر الوصف والكود والوحدة حسب احتياجك. كل بند / اقتراح يُصدّر في صف واحد.</small>
+      </section>
+      <div class="compare-grid" id="compareValueFields">
+        <div class="field"><label for="compareFieldA">العمود المطلوب مقارنة قيمته في الأول</label><select id="compareFieldA"><option value="">كل الأعمدة المشتركة</option></select></div>
+        <div class="field"><label for="compareFieldB">العمود المقابل في الثاني</label><select id="compareFieldB"><option value="">كل الأعمدة المشتركة</option></select></div>
+      </div>
+      <div class="field">
+        <label for="compareQuery">كلمة أو عبارة لتحديد عناصر المقارنة (اختياري)</label>
+        <input id="compareQuery" type="search" placeholder="مثال: الحفر أو أنظمة إطفاء الحريق">
+        <small>يبحث في الملفين ويقارن العناصر المطابقة مع نظائرها بالمفتاح، حتى لو تغيّر وصفها في الملف الآخر. اتركه فارغًا لمقارنة الكل.</small>
+      </div>
+      <button class="primary-btn" id="runCompareBtn">قارن الملفين</button>
+      <div class="banner err" id="compareError"></div>
+    </div>
+  </div>
+</div>
+
+<div id="addColumnOverlay" class="setup-overlay hidden">
+  <div class="setup-wrap">
+    <div class="setup-card">
+      <button class="setup-close" id="addColumnCloseBtn">✕</button>
+      <h2>إضافة عمود جديد</h2>
+      <p>العمود ده هيتضاف لكل الصفوف في هذا الملف بس، وهيفضل زي ما هو دايماً حتى لو عملت مزامنة تانية مع الإكسل.</p>
+      <div class="field">
+        <label>اسم العمود</label>
+        <input type="text" id="newColNameInput" placeholder="مثال: حالة المتابعة">
+      </div>
+      <div class="field">
+        <label>قيمة افتراضية لكل الصفوف (اختياري)</label>
+        <input type="text" id="newColDefaultInput" placeholder="مثال: لم تتم المراجعة">
+      </div>
+      <button class="primary-btn" id="addColumnConfirmBtn">إضافة العمود</button>
+      <div class="banner err" id="addColumnError"></div>
+    </div>
+  </div>
+</div>
+
+<div id="compareResultsOverlay" class="setup-overlay hidden">
+  <div class="compare-results-wrap">
+    <div class="compare-results-card">
+      <div class="compare-results-header">
+        <h2 id="compareResultsTitle">نتيجة المقارنة</h2>
+        <div style="display:flex; gap:8px;">
+          <button class="link-btn" id="compareExportBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0-4-4m4 4 4-4M5 21h14"/></svg>
+            تصدير هذه المقارنة
+          </button>
+          <button class="setup-close" id="compareResultsCloseBtn" style="position:static;">✕</button>
+        </div>
+      </div>
+      <div id="compareSummary" class="compare-summary"></div>
+      <p id="compareNotice" class="edit-hint"></p>
+      <p id="reviewSaveStatus" class="edit-hint" aria-live="polite">الجلسة محفوظة على الجهاز. القبول والرفض يُحفظان فورًا؛ استخدم حفظ الملاحظة لتسجيل النص.</p>
+      <label class="qty-toggle hidden" id="compareQtyToggleWrap"><input type="checkbox" id="compareQtyOnly"> إظهار البنود اللي الكمية اتغيرت فيها فقط (<span id="compareQtyCount">0</span>)</label>
+      <div id="compareTabs" class="compare-tabs"></div>
+      <div id="compareBody" class="compare-body"></div>
+      <div class="pager"><button id="comparePrev">السابق</button><span id="comparePageLabel"></span><button id="compareNext">التالي</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="jobPanel" class="hidden" role="status" style="position:fixed;bottom:18px;right:18px;z-index:1000;background:#fff;padding:18px;border:1px solid #A97C2F;border-radius:12px;max-width:90vw"><span id="jobMessage"></span> <button class="link-btn" id="cancelJobBtn">إلغاء العملية</button></div>
+<div id="savedComparisonsOverlay" class="setup-overlay hidden"><div class="setup-wrap compare-wrap"><div class="setup-card"><button class="setup-close" id="savedComparisonsClose">✕</button><h2>المقارنات المحفوظة</h2><p>لقطات ثابتة وقت التنفيذ. يمكن استكمال مراجعتها حتى بعد تغيير ملفات المصدر. إنشاء مقارنة جديدة يستخدم البيانات الحالية.</p><div id="savedComparisonsList" aria-live="polite"></div></div></div></div>
+<script src="{{ url_for('static', filename='quantity.js', v=app_version) }}"></script>
+<script src="{{ url_for('static', filename='review.js', v=app_version) }}"></script>
+<script src="{{ url_for('static', filename='app.js', v=app_version) }}"></script>
+</body>
+</html>

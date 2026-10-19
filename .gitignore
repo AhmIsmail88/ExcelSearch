@@ -1,0 +1,35 @@
+# Local configuration, secrets and user data
+config*.json
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*
+secrets*
+databases/
+comparisons/
+*.sqlite*
+*.db
+*.db-*
+*.xlsx
+*.xls
+*.xlsm
+*.csv
+*.tsv
+# Local builds and diagnostics
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.qa-tmp/
+.publish-repo/
+build/
+dist/
+*.log
+ui-*.png
+.vscode/
+.idea/
