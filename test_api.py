@@ -76,6 +76,14 @@ class APITests(unittest.TestCase):
         headers=[c.value for c in sheet[1]]
         cell=sheet.cell(2,headers.index('qty')+1)
         self.assertEqual((cell.value,cell.data_type),('=1+1','s'))
+        self.assertTrue(sheet.sheet_view.rightToLeft)
+        self.assertFalse(sheet.sheet_view.showGridLines)
+        self.assertEqual(sheet.freeze_panes,'B2')
+        self.assertEqual(sheet.auto_filter.ref,f'A1:{sheet.cell(1,sheet.max_column).column_letter}2')
+        self.assertEqual(sheet['A1'].fill.fgColor.rgb,'0019354A')
+        self.assertTrue(cell.alignment.wrap_text)
+        self.assertEqual(sheet.page_setup.orientation,'landscape')
+        self.assertIn('=1+1',[c.value for row in wb['الملفات'] for c in row])
         wb.close();response.close()
 
     def test_all_file_filters_and_export(self):
